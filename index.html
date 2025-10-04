@@ -7,49 +7,151 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; }
         
         #map { 
             height: 100vh; 
-            width: 100%; 
+            width: 60%; 
         }
         
-        .info-panel {
-            position: absolute;
-            top: 10px;
-            right: 10px;
+        .sidebar {
+            width: 40%;
+            height: 100vh;
+            background: #f5f6fa;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #ddd;
+        }
+        
+        .search-panel {
             background: white;
             padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000;
-            max-width: 300px;
+            border-bottom: 2px solid #3498db;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
-        .info-panel h3 {
+        .search-panel h3 {
             margin-bottom: 10px;
             color: #2c3e50;
         }
         
-        .stat {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-            border-bottom: 1px solid #eee;
+        #searchInput {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
         }
         
-        .stat:last-child {
-            border-bottom: none;
+        #searchInput:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .stats-bar {
+            background: white;
+            padding: 10px 15px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-around;
+            font-size: 12px;
+        }
+        
+        .stat {
+            text-align: center;
         }
         
         .stat-label {
             font-weight: 600;
             color: #555;
+            display: block;
         }
         
         .stat-value {
             color: #2980b9;
             font-weight: bold;
+            font-size: 16px;
+            display: block;
+        }
+        
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .message-item {
+            background: white;
+            margin-bottom: 10px;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 4px solid #95a5a6;
+        }
+        
+        .message-item:hover {
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
+        }
+        
+        .message-item.active {
+            border-left-color: #3498db;
+            background: #ebf5fb;
+        }
+        
+        .message-item.type-sms { border-left-color: #e74c3c; }
+        .message-item.type-instant { border-left-color: #3498db; }
+        .message-item.type-call { border-left-color: #2ecc71; }
+        
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .message-number {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+        
+        .message-type {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: #ecf0f1;
+            color: #555;
+        }
+        
+        .message-time {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 8px;
+        }
+        
+        .message-content {
+            color: #34495e;
+            font-size: 13px;
+            line-height: 1.4;
+            max-height: 60px;
+            overflow: hidden;
+        }
+        
+        .message-location {
+            font-size: 11px;
+            color: #95a5a6;
+            margin-top: 6px;
+            font-family: monospace;
+        }
+        
+        .no-results {
+            text-align: center;
+            color: #7f8c8d;
+            padding: 40px 20px;
         }
         
         .custom-popup {
@@ -105,19 +207,29 @@
     <div id="loading" class="loading">Loading map...</div>
     <div id="map"></div>
     
-    <div class="info-panel">
-        <h3>📍 Location Statistics</h3>
-        <div class="stat">
-            <span class="stat-label">Total Locations:</span>
-            <span class="stat-value" id="totalLocations">0</span>
+    <div class="sidebar">
+        <div class="search-panel">
+            <h3>🔍 Search Messages</h3>
+            <input type="text" id="searchInput" placeholder="Search by name, number, message content, or type...">
         </div>
-        <div class="stat">
-            <span class="stat-label">With Messages:</span>
-            <span class="stat-value" id="withMessages">0</span>
+        
+        <div class="stats-bar">
+            <div class="stat">
+                <span class="stat-label">Total</span>
+                <span class="stat-value" id="totalLocations">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Showing</span>
+                <span class="stat-value" id="showingCount">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Numbers</span>
+                <span class="stat-value" id="uniqueNumbers">0</span>
+            </div>
         </div>
-        <div class="stat">
-            <span class="stat-label">Unique Numbers:</span>
-            <span class="stat-value" id="uniqueNumbers">0</span>
+        
+        <div class="messages-container" id="messagesContainer">
+            <div class="no-results">Loading messages...</div>
         </div>
     </div>
 
@@ -126,6 +238,8 @@
         let map;
         let markers = [];
         let locationData = [];
+        let filteredData = [];
+        let activeMarkerIndex = null;
         
         // Initialize map
         function initMap() {
@@ -139,8 +253,16 @@
             document.getElementById('loading').style.display = 'none';
         }
         
+        // Get message type class
+        function getTypeClass(type) {
+            if (type.includes('SMS')) return 'type-sms';
+            if (type.includes('Instant')) return 'type-instant';
+            if (type.includes('Call')) return 'type-call';
+            return '';
+        }
+        
         // Create custom marker icon based on message type
-        function getMarkerIcon(type) {
+        function getMarkerIcon(type, isActive = false) {
             const colors = {
                 'SMS Messages': '#e74c3c',
                 'Instant Messages': '#3498db',
@@ -149,12 +271,14 @@
             };
             
             const color = colors[type] || colors['default'];
+            const size = isActive ? 40 : 30;
+            const border = isActive ? 4 : 3;
             
             return L.divIcon({
                 className: 'custom-icon',
-                html: `<div style="background-color: ${color}; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
-                iconSize: [30, 30],
-                iconAnchor: [15, 15]
+                html: `<div style="background-color: ${color}; width: ${size}px; height: ${size}px; border-radius: 50%; border: ${border}px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
+                iconSize: [size, size],
+                iconAnchor: [size/2, size/2]
             });
         }
         
@@ -164,16 +288,23 @@
             return timestamp.replace('(UTC+0)', '').trim();
         }
         
-        // Extract phone number from party field
+        // Extract display name from party field (keeps both number and name)
+        function extractDisplayName(party) {
+            if (!party) return 'Unknown';
+            // Remove "From:" or "To:" prefix if present
+            return party.replace(/^(From|To):\s*/, '').trim();
+        }
+        
+        // Extract just the phone number for grouping/counting
         function extractNumber(party) {
             if (!party) return 'Unknown';
             const match = party.match(/\+?\d[\d\s]+/);
-            return match ? match[0].trim() : party.split(' ')[0];
+            return match ? match[0].trim() : party;
         }
         
         // Create popup content
-        function createPopup(entry) {
-            const number = extractNumber(entry.party);
+        function createPopup(entry, index) {
+            const displayName = extractDisplayName(entry.party);
             const timestamp = formatTimestamp(entry.timestamp);
             const description = entry.description || 'No message content';
             const type = entry.type || 'Unknown';
@@ -181,7 +312,7 @@
             
             return `
                 <div class="custom-popup">
-                    <div class="popup-header">${number}</div>
+                    <div class="popup-header">${displayName}</div>
                     <div class="popup-content">
                         <div class="popup-row">
                             <div class="popup-label">Type</div>
@@ -204,21 +335,43 @@
             `;
         }
         
+        // Highlight active marker
+        function setActiveMarker(index) {
+            activeMarkerIndex = index;
+            
+            // Update all markers
+            markers.forEach((marker, i) => {
+                const entry = filteredData[i];
+                marker.setIcon(getMarkerIcon(entry.type, i === index));
+            });
+            
+            // Update message items
+            document.querySelectorAll('.message-item').forEach((item, i) => {
+                item.classList.toggle('active', i === index);
+            });
+        }
+        
         // Add markers to map
         function addMarkers(data) {
             markers.forEach(marker => map.removeLayer(marker));
             markers = [];
             
-            data.forEach(entry => {
+            data.forEach((entry, index) => {
                 if (entry.location && entry.location.latitude && entry.location.longitude) {
                     const marker = L.marker(
                         [entry.location.latitude, entry.location.longitude],
                         { icon: getMarkerIcon(entry.type) }
                     ).addTo(map);
                     
-                    marker.bindPopup(createPopup(entry), {
+                    marker.bindPopup(createPopup(entry, index), {
                         maxWidth: 350,
                         className: 'custom-popup-container'
+                    });
+                    
+                    // Click handler for marker
+                    marker.on('click', () => {
+                        setActiveMarker(index);
+                        scrollToMessage(index);
                     });
                     
                     markers.push(marker);
@@ -229,18 +382,95 @@
                 const group = L.featureGroup(markers);
                 map.fitBounds(group.getBounds().pad(0.1));
             }
+        }
+        
+        // Scroll to message in list
+        function scrollToMessage(index) {
+            const messageItem = document.querySelector(`[data-index="${index}"]`);
+            if (messageItem) {
+                messageItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+        
+        // Render messages in sidebar
+        function renderMessages(data) {
+            const container = document.getElementById('messagesContainer');
             
-            updateStatistics(data);
+            if (data.length === 0) {
+                container.innerHTML = '<div class="no-results">No messages found</div>';
+                return;
+            }
+            
+            container.innerHTML = data.map((entry, index) => {
+                const displayName = extractDisplayName(entry.party);
+                const timestamp = formatTimestamp(entry.timestamp);
+                const description = entry.description || 'No message content';
+                const type = entry.type || 'Unknown';
+                const typeClass = getTypeClass(type);
+                
+                return `
+                    <div class="message-item ${typeClass}" data-index="${index}">
+                        <div class="message-header">
+                            <span class="message-number">${displayName}</span>
+                            <span class="message-type">${type}</span>
+                        </div>
+                        <div class="message-time">${timestamp}</div>
+                        <div class="message-content">${description}</div>
+                        <div class="message-location">📍 ${entry.location.latitude.toFixed(6)}, ${entry.location.longitude.toFixed(6)}</div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Add click handlers to messages
+            document.querySelectorAll('.message-item').forEach((item, index) => {
+                item.addEventListener('click', () => {
+                    setActiveMarker(index);
+                    
+                    // Open marker popup and center map
+                    if (markers[index]) {
+                        markers[index].openPopup();
+                        map.setView(markers[index].getLatLng(), 15);
+                    }
+                });
+            });
+        }
+        
+        // Search and filter messages
+        function filterMessages(searchTerm) {
+            const term = searchTerm.toLowerCase();
+            
+            if (!term) {
+                filteredData = [...locationData];
+            } else {
+                filteredData = locationData.filter(entry => {
+                    const displayName = extractDisplayName(entry.party).toLowerCase();
+                    const number = extractNumber(entry.party).toLowerCase();
+                    const description = (entry.description || '').toLowerCase();
+                    const type = (entry.type || '').toLowerCase();
+                    const timestamp = (entry.timestamp || '').toLowerCase();
+                    
+                    return displayName.includes(term) || 
+                           number.includes(term) || 
+                           description.includes(term) || 
+                           type.includes(term) ||
+                           timestamp.includes(term);
+                });
+            }
+            
+            addMarkers(filteredData);
+            renderMessages(filteredData);
+            updateStatistics();
+            
+            // Clear active marker
+            activeMarkerIndex = null;
         }
         
         // Update statistics
-        function updateStatistics(data) {
-            document.getElementById('totalLocations').textContent = data.length;
+        function updateStatistics() {
+            document.getElementById('totalLocations').textContent = locationData.length;
+            document.getElementById('showingCount').textContent = filteredData.length;
             
-            const withMessages = data.filter(e => e.description && e.description.trim()).length;
-            document.getElementById('withMessages').textContent = withMessages;
-            
-            const uniqueNumbers = new Set(data.map(e => extractNumber(e.party))).size;
+            const uniqueNumbers = new Set(filteredData.map(e => extractNumber(e.party))).size;
             document.getElementById('uniqueNumbers').textContent = uniqueNumbers;
         }
         
@@ -255,11 +485,13 @@
                 const data = await response.json();
                 console.log(`Loaded ${data.length} entries from JSON file`);
                 
-                // The Python script already filtered and formatted the data
-                // Just use it directly
                 locationData = data;
+                filteredData = [...locationData];
                 
-                addMarkers(locationData);
+                addMarkers(filteredData);
+                renderMessages(filteredData);
+                updateStatistics();
+                
                 console.log(`✓ Displaying ${locationData.length} locations on map`);
                 
             } catch (error) {
@@ -272,7 +504,7 @@
                         "id": "88",
                         "type": "Instant Messages",
                         "timestamp": "05/06/2014 15:12:53(UTC+0)",
-                        "party": "From: +9607873272 Shaa",
+                        "party": "+9607873272 Shaa",
                         "direction": "From",
                         "description": "Hiii",
                         "location": {"latitude": 4.173226, "longitude": 73.512594}
@@ -281,7 +513,7 @@
                         "id": "102",
                         "type": "Instant Messages",
                         "timestamp": "05/06/2014 15:15:22(UTC+0)",
-                        "party": "From: +9609858856 Ali Manik Nazima",
+                        "party": "+9609858856 Ali Manik Nazima",
                         "direction": "From",
                         "description": "Yes",
                         "location": {"latitude": 4.173039, "longitude": 73.486022}
@@ -290,14 +522,19 @@
                         "id": "232",
                         "type": "Instant Messages",
                         "timestamp": "05/06/2014 18:30:09(UTC+0)",
-                        "party": "From: +9609641896",
+                        "party": "+9609641896 Unknown Contact",
                         "direction": "From",
                         "description": "140201281872.jpg",
                         "location": {"latitude": 4.172749, "longitude": 73.508338}
                     }
                 ];
                 
-                addMarkers(sampleData);
+                locationData = sampleData;
+                filteredData = [...locationData];
+                
+                addMarkers(filteredData);
+                renderMessages(filteredData);
+                updateStatistics();
             }
         }
         
@@ -305,6 +542,11 @@
         window.addEventListener('load', () => {
             initMap();
             autoLoadJSON();
+            
+            // Add search event listener
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                filterMessages(e.target.value);
+            });
         });
     </script>
 </body>
