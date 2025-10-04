@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investigation Board - Subject: ADEEB</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+        
+        .investigation-header {
+            background: linear-gradient(135deg, #8B0000 0%, #4a0000 100%);
+            padding: 20px 40px;
+            border-bottom: 4px solid #ff0000;
+            box-shadow: 0 5px 20px rgba(255,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .investigation-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.1) 2px,
+                rgba(0,0,0,0.1) 4px
+            );
+        }
+        
+        .header-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .subject-info h1 {
+            font-size: 36px;
+            letter-spacing: 4px;
+            color: #fff;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.7);
+            margin-bottom: 5px;
+        }
+        
+        .case-number {
+            font-size: 14px;
+            color: #ffcccc;
+            letter-spacing: 2px;
+        }
+        
+        .classified-badge {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .classified {
+            background: #ff0000;
+            color: #fff;
+            padding: 12px 25px;
+            font-weight: bold;
+            font-size: 16px;
+            letter-spacing: 3px;
+            transform: rotate(-2deg);
+            box-shadow: 0 4px 15px rgba(255,0,0,0.6);
+        }
+        
+        .evidence-count {
+            background: #333;
+            border: 2px solid #8B0000;
+            padding: 10px 20px;
+            text-align: center;
+        }
+        
+        .evidence-count-label {
+            font-size: 10px;
+            color: #999;
+            letter-spacing: 1px;
+        }
+        
+        .evidence-count-value {
+            font-size: 24px;
+            color: #ff4444;
+            font-weight: bold;
+        }
+        
+        #map { 
+            height: calc(100vh - 100px);
+            width: 100%;
+            background: #0a0a0a;
+            position: relative;
+        }
+        
+        /* Red string board effect */
+        .leaflet-overlay-pane svg path {
+            stroke: #ff0000 !important;
+            stroke-width: 3 !important;
+            stroke-dasharray: 8, 4;
+            animation: dashAnimation 30s linear infinite;
+            filter: drop-shadow(0 0 3px #ff0000) drop-shadow(0 0 8px rgba(255,0,0,0.4));
+            opacity: 0.9;
+        }
+        
+        @keyframes dashAnimation {
+            to { stroke-dashoffset: -1000; }
+        }
+        
+        /* Pin markers like thumbtacks on a board */
+        .investigation-pin {
+            position: relative;
+        }
+        
+        .investigation-pin::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-top: 8px solid #444;
+        }
+        
+        .pin-head {
+            background: radial-gradient(circle at 30% 30%, #ff4444, #cc0000);
+            border: 3px solid #fff;
+            border-radius: 50%;
+            box-shadow: 
+                0 0 15px rgba(255,0,0,0.8),
+                0 0 30px rgba(255,0,0,0.4),
+                inset -2px -2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .pin-label {
+            position: absolute;
+            background: rgba(26, 26, 26, 0.95);
+            color: #ff4444;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            border: 1px solid #8B0000;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.8);
+            top: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: none;
+        }
+        
+        /* Timeline sequence numbers */
+        .sequence-number {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a1a1a;
+            border: 2px solid #ff0000;
+            color: #ff0000;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(255,0,0,0.5);
+        }
+        
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(26, 26, 26, 0.98);
+            padding: 20px;
+            border: 3px solid #8B0000;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.9);
+            min-width: 200px;
+        }
+        
+        .controls h3 {
+            color: #ff4444;
+            font-size: 14px;
+            margin-bottom: 15px;
+            letter-spacing: 3px;
+            text-align: center;
+            border-bottom: 2px solid #8B0000;
+            padding-bottom: 10px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        .control-label {
+            color: #999;
+            font-size: 10px;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .control-btn {
+            background: #333;
+            color: #fff;
+            border: 2px solid #8B0000;
+            padding: 12px 20px;
+            width: 100%;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            letter-spacing: 2px;
+            transition: all 0.3s;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+        
+        .control-btn:hover {
+            background: #8B0000;
+            box-shadow: 0 0 15px rgba(139,0,0,0.6);
+            border-color: #ff0000;
+        }
+        
+        .control-btn.active {
+            background: #ff0000;
+            border-color: #ff0000;
+            box-shadow: 0 0 20px rgba(255,0,0,0.8);
+            color: #fff;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(26, 26, 26, 0.98);
+            padding: 15px;
+            border: 2px solid #8B0000;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.8);
+        }
+        
+        .legend h4 {
+            color: #ff4444;
+            font-size: 12px;
+            letter-spacing: 2px;
+            margin-bottom: 10px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 11px;
+            color: #ccc;
+        }
+        
+        .legend-line {
+            width: 30px;
+            height: 3px;
+            background: #ff0000;
+        }
+        
+        .legend-pin {
+            width: 12px;
+            height: 12px;
+            background: #ff0000;
+            border: 2px solid #fff;
+            border-radius: 50%;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+            background: #1a1a1a;
+            padding: 30px 60px;
+            border: 4px solid #ff0000;
+            box-shadow: 0 0 40px rgba(255,0,0,0.6);
+            color: #ff0000;
+            font-size: 20px;
+            letter-spacing: 4px;
+            animation: loadingPulse 1.5s infinite;
+        }
+        
+        @keyframes loadingPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        /* Custom popup styling */
+        .leaflet-popup-content-wrapper {
+            background: #1a1a1a;
+            color: #fff;
+            border: 2px solid #8B0000;
+            box-shadow: 0 5px 20px rgba(255,0,0,0.4);
+        }
+        
+        .leaflet-popup-tip {
+            background: #1a1a1a;
+            border: 2px solid #8B0000;
+        }
+    </style>
+</head>
+<body>
+    <div class="investigation-header">
+        <div class="header-content">
+            <div class="subject-info">
+                <h1>SUBJECT: ADEEB</h1>
+                <div class="case-number">CASE #2014-MV-0506 | MOVEMENT RECONSTRUCTION</div>
+            </div>
+            <div class="classified-badge">
+                <div class="evidence-count">
+                    <div class="evidence-count-label">EVIDENCE POINTS</div>
+                    <div class="evidence-count-value" id="evidenceCount">0</div>
+                </div>
+                <div class="classified">CLASSIFIED</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="loading">ANALYZING EVIDENCE...</div>
+    <div id="map"></div>
+    
+    <div class="controls">
+        <h3>ANALYSIS MODE</h3>
+        <div class="control-group">
+            <button class="control-btn active" id="showConnections">Connection Lines</button>
+            <button class="control-btn" id="showSequence">Sequence Numbers</button>
+            <button class="control-btn" id="showLabels">Time Labels</button>
+        </div>
+    </div>
+    
+    <div class="legend">
+        <h4>LEGEND</h4>
+        <div class="legend-item">
+            <div class="legend-pin"></div>
+            <span>Location Point</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-line"></div>
+            <span>Movement Path</span>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let markers = [];
+        let polylines = [];
+        let locationData = [];
+        let showConnections = true;
+        let showSequence = false;
+        let showLabels = false;
+        
+        function initMap() {
+            map = L.map('map', {
+                zoomControl: false,
+                preferCanvas: true
+            }).setView([4.1755, 73.5093], 14);
+            
+            // Faster static-like tile layer with better caching
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© Investigation Board',
+                maxZoom: 19,
+                updateWhenIdle: true,
+                updateWhenZooming: false,
+                keepBuffer: 2
+            }).addTo(map);
+            
+            L.control.zoom({
+                position: 'bottomleft'
+            }).addTo(map);
+            
+            // Add a label for Male'
+            const maleLabel = L.divIcon({
+                className: 'male-label',
+                html: '<div style="background: rgba(26,26,26,0.9); color: #ff4444; padding: 8px 15px; border: 2px solid #8B0000; font-weight: bold; letter-spacing: 2px; box-shadow: 0 0 10px rgba(0,0,0,0.8); white-space: nowrap;">MALÉ, MALDIVES</div>',
+                iconSize: [120, 30],
+                iconAnchor: [60, -10]
+            });
+            
+            L.marker([4.1755, 73.5093], { icon: maleLabel }).addTo(map);
+            
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        function createPin(lat, lng, index, timestamp) {
+            const size = 18;
+            const time = timestamp ? timestamp.match(/\d{2}:\d{2}:\d{2}/)?.[0] || '' : '';
+            const sequenceNum = index + 1;
+            
+            const html = `
+                <div class="investigation-pin">
+                    ${showSequence ? `<div class="sequence-number">${sequenceNum}</div>` : ''}
+                    <div class="pin-head" style="width: ${size}px; height: ${size}px;"></div>
+                    ${showLabels ? `<div class="pin-label">${time}</div>` : ''}
+                </div>
+            `;
+            
+            const icon = L.divIcon({
+                className: '',
+                html: html,
+                iconSize: [size, size + 30],
+                iconAnchor: [size/2, size/2]
+            });
+            
+            return L.marker([lat, lng], { icon: icon });
+        }
+        
+        function drawRedLines(data) {
+            polylines.forEach(line => map.removeLayer(line));
+            polylines = [];
+            
+            if (!showConnections || data.length < 2) return;
+            
+            const sorted = [...data].sort((a, b) => {
+                return new Date(a.timestamp) - new Date(b.timestamp);
+            });
+            
+            for (let i = 0; i < sorted.length - 1; i++) {
+                const start = sorted[i];
+                const end = sorted[i + 1];
+                
+                if (start.location && end.location) {
+                    const line = L.polyline([
+                        [start.location.latitude, start.location.longitude],
+                        [end.location.latitude, end.location.longitude]
+                    ], {
+                        color: '#ff0000',
+                        weight: 3,
+                        opacity: 0.85,
+                        dashArray: '8, 4'
+                    }).addTo(map);
+                    
+                    polylines.push(line);
+                }
+            }
+        }
+        
+        function extractDisplayName(party) {
+            if (!party) return 'UNKNOWN CONTACT';
+            return party.replace(/^(From|To):\s*/, '').trim();
+        }
+        
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'TIME UNKNOWN';
+            return timestamp.replace('(UTC+0)', '').trim();
+        }
+        
+        function createPopup(entry, index) {
+            const displayName = extractDisplayName(entry.party);
+            const time = formatTimestamp(entry.timestamp);
+            const description = entry.description || 'NO MESSAGE CONTENT';
+            const type = entry.type || 'UNKNOWN';
+            
+            return `
+                <div style="background: #1a1a1a; color: #fff; padding: 0; min-width: 280px; font-family: 'Courier New', monospace;">
+                    <div style="background: #8B0000; color: #fff; padding: 12px; font-weight: bold; letter-spacing: 2px; text-align: center;">
+                        EVIDENCE #${String(index + 1).padStart(3, '0')}
+                    </div>
+                    <div style="padding: 15px;">
+                        <div style="color: #ff4444; font-size: 12px; margin-bottom: 10px; letter-spacing: 1px;">
+                            ${time}
+                        </div>
+                        <div style="border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 8px;">
+                            <div style="color: #999; font-size: 10px; margin-bottom: 3px;">CONTACT:</div>
+                            <div style="color: #fff; font-size: 13px; font-weight: bold;">${displayName}</div>
+                        </div>
+                        <div style="border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 8px;">
+                            <div style="color: #999; font-size: 10px; margin-bottom: 3px;">TYPE:</div>
+                            <div style="color: #ccc; font-size: 12px;">${type}</div>
+                        </div>
+                        <div style="border-bottom: 1px solid #333; padding-bottom: 8px; margin-bottom: 8px;">
+                            <div style="color: #999; font-size: 10px; margin-bottom: 3px;">MESSAGE:</div>
+                            <div style="color: #ccc; font-size: 11px; line-height: 1.4;">
+                                ${description.substring(0, 150)}${description.length > 150 ? '...' : ''}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="color: #999; font-size: 10px; margin-bottom: 3px;">COORDINATES:</div>
+                            <div style="color: #666; font-size: 10px; font-family: monospace;">
+                                LAT: ${entry.location.latitude.toFixed(6)}<br>
+                                LNG: ${entry.location.longitude.toFixed(6)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function addMarkers(data) {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+            
+            const sorted = [...data].sort((a, b) => {
+                return new Date(a.timestamp) - new Date(b.timestamp);
+            });
+            
+            sorted.forEach((entry, index) => {
+                if (entry.location && entry.location.latitude && entry.location.longitude) {
+                    const marker = createPin(
+                        entry.location.latitude,
+                        entry.location.longitude,
+                        index,
+                        entry.timestamp
+                    );
+                    
+                    marker.addTo(map);
+                    marker.bindPopup(createPopup(entry, index), {
+                        maxWidth: 350
+                    });
+                    
+                    markers.push(marker);
+                }
+            });
+            
+            drawRedLines(sorted);
+            
+            // Auto-zoom to fit all markers after a brief delay
+            if (markers.length > 0) {
+                setTimeout(() => {
+                    const group = L.featureGroup(markers);
+                    map.fitBounds(group.getBounds().pad(0.1));
+                }, 500);
+            }
+        }
+        
+        function refreshMarkers() {
+            const sorted = [...locationData].sort((a, b) => {
+                return new Date(a.timestamp) - new Date(b.timestamp);
+            });
+            addMarkers(sorted);
+        }
+        
+        async function loadData() {
+            try {
+                const response = await fetch('locations_from_timeline.json');
+                if (!response.ok) throw new Error('File not found');
+                
+                const data = await response.json();
+                console.log(`Loaded ${data.length} evidence points`);
+                
+                locationData = data;
+                document.getElementById('evidenceCount').textContent = data.length;
+                addMarkers(locationData);
+                
+            } catch (error) {
+                console.log('Using sample data');
+                
+                const sampleData = [
+                    {
+                        "id": "88",
+                        "type": "Instant Messages",
+                        "timestamp": "05/06/2014 15:12:53(UTC+0)",
+                        "party": "+9607873272 Shaa",
+                        "direction": "From",
+                        "description": "Hiii",
+                        "location": {"latitude": 4.173226, "longitude": 73.512594}
+                    },
+                    {
+                        "id": "102",
+                        "type": "Instant Messages",
+                        "timestamp": "05/06/2014 15:15:22(UTC+0)",
+                        "party": "+9609858856 Ali Manik Nazima",
+                        "direction": "From",
+                        "description": "Yes",
+                        "location": {"latitude": 4.173039, "longitude": 73.486022}
+                    },
+                    {
+                        "id": "232",
+                        "type": "Instant Messages",
+                        "timestamp": "05/06/2014 18:30:09(UTC+0)",
+                        "party": "+9609641896 Unknown Contact",
+                        "direction": "From",
+                        "description": "140201281872.jpg",
+                        "location": {"latitude": 4.172749, "longitude": 73.508338}
+                    }
+                ];
+                
+                locationData = sampleData;
+                document.getElementById('evidenceCount').textContent = sampleData.length;
+                addMarkers(locationData);
+            }
+        }
+        
+        // Controls
+        document.getElementById('showConnections').addEventListener('click', function() {
+            showConnections = !showConnections;
+            this.classList.toggle('active');
+            refreshMarkers();
+        });
+        
+        document.getElementById('showSequence').addEventListener('click', function() {
+            showSequence = !showSequence;
+            this.classList.toggle('active');
+            refreshMarkers();
+        });
+        
+        document.getElementById('showLabels').addEventListener('click', function() {
+            showLabels = !showLabels;
+            this.classList.toggle('active');
+            refreshMarkers();
+        });
+        
+        window.addEventListener('load', () => {
+            initMap();
+            loadData();
+        });
+    </script>
+</body>
+</html>
